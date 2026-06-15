@@ -154,18 +154,6 @@ The main goal is to isolate application and domain rules from external technolog
 
 ### Architecture Diagram
 
-Place the customized architecture image at:
-
-```text
-docs/architecture/weatherbridge-hexagonal-architecture.png
-```
-
-Then include it in this section:
-
-```markdown
-![WeatherBridge Hexagonal Architecture](docs/architecture/weatherbridge_hexagonal_architecture.png)
-```
-
 ![WeatherBridge Hexagonal Architecture](docs/architecture/weatherbridge_hexagonal_architecture.png)
 
 ### Architectural Overview

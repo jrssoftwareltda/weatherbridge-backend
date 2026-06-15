@@ -163,10 +163,10 @@ docs/architecture/weatherbridge-hexagonal-architecture.png
 Then include it in this section:
 
 ```markdown
-![WeatherBridge Hexagonal Architecture](docs/architecture/weatherbridge-hexagonal-architecture.png)
+![WeatherBridge Hexagonal Architecture](docs/architecture/weatherbridge_hexagonal_architecture.png)
 ```
 
-![WeatherBridge Hexagonal Architecture](docs/architecture/weatherbridge-hexagonal-architecture.png)
+![WeatherBridge Hexagonal Architecture](docs/architecture/weatherbridge_hexagonal_architecture.png)
 
 ### Architectural Overview
 

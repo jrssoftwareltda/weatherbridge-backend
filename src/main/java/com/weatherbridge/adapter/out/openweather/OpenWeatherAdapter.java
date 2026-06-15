@@ -1,11 +1,13 @@
 package com.weatherbridge.adapter.out.openweather;
 
 import com.weatherbridge.adapter.out.openweather.dto.OpenWeatherCurrentResponse;
+import com.weatherbridge.adapter.out.openweather.dto.OpenWeatherForecastResponse;
 import com.weatherbridge.application.exception.CityNotFoundException;
 import com.weatherbridge.application.exception.WeatherProviderException;
 import com.weatherbridge.application.model.WeatherLocationQuery;
 import com.weatherbridge.application.port.out.WeatherProviderPort;
 import com.weatherbridge.domain.model.CurrentWeather;
+import com.weatherbridge.domain.model.WeatherForecast;
 import com.weatherbridge.infrastructure.properties.OpenWeatherProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,8 +19,8 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
-import java.net.http.HttpTimeoutException;
 import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
 
 @Component
 public class OpenWeatherAdapter
@@ -31,30 +33,35 @@ public class OpenWeatherAdapter
 
     private final RestClient restClient;
     private final OpenWeatherProperties properties;
-    private final OpenWeatherMapper mapper;
+    private final OpenWeatherMapper currentWeatherMapper;
+    private final OpenWeatherForecastMapper forecastMapper;
 
     public OpenWeatherAdapter(
             @Qualifier("openWeatherRestClient")
             RestClient restClient,
             OpenWeatherProperties properties,
-            OpenWeatherMapper mapper
+            OpenWeatherMapper currentWeatherMapper,
+            OpenWeatherForecastMapper forecastMapper
     ) {
         this.restClient = restClient;
         this.properties = properties;
-        this.mapper = mapper;
+        this.currentWeatherMapper =
+                currentWeatherMapper;
+        this.forecastMapper = forecastMapper;
     }
 
     @Override
     @Cacheable(
             cacheNames = "current-weather",
-            key = "#query.cacheKey()",
+            key = "#root.args[0].cacheKey()",
             sync = true
     )
     public CurrentWeather getCurrentWeather(
             WeatherLocationQuery query
     ) {
         log.debug(
-                "Requesting current weather: city={}, stateCode={}, countryCode={}",
+                "Requesting current weather: "
+                        + "city={}, stateCode={}, countryCode={}",
                 query.city(),
                 query.stateCode(),
                 query.countryCode()
@@ -89,7 +96,7 @@ public class OpenWeatherAdapter
                                     OpenWeatherCurrentResponse.class
                             );
 
-            return mapper.toDomain(
+            return currentWeatherMapper.toDomain(
                     response,
                     query
             );
@@ -106,10 +113,86 @@ public class OpenWeatherAdapter
             );
 
         } catch (RestClientException exception) {
-            throw new WeatherProviderException(
-                    WeatherProviderException.FailureType
-                            .UNAVAILABLE,
-                    "Unable to communicate with OpenWeather.",
+            throw unavailableException(
+                    exception
+            );
+        }
+    }
+
+    @Override
+    @Cacheable(
+            cacheNames = "weather-forecast",
+            key = "#root.args[0].cacheKey()",
+            sync = true
+    )
+    public WeatherForecast getFiveDayForecast(
+            WeatherLocationQuery query
+    ) {
+        log.debug(
+                "Requesting five-day forecast: "
+                        + "city={}, stateCode={}, countryCode={}",
+                query.city(),
+                query.stateCode(),
+                query.countryCode()
+        );
+
+        try {
+            OpenWeatherForecastResponse response =
+                    restClient
+                            .get()
+                            .uri(uriBuilder -> uriBuilder
+                                    .path("/forecast")
+                                    .queryParam(
+                                            "q",
+                                            query.toProviderQuery()
+                                    )
+                                    .queryParam(
+                                            "appid",
+                                            properties.apiKey()
+                                    )
+                                    .queryParam(
+                                            "units",
+                                            properties.units()
+                                    )
+                                    .queryParam(
+                                            "lang",
+                                            properties.language()
+                                    )
+                                    .build()
+                            )
+                            .retrieve()
+                            .body(
+                                    OpenWeatherForecastResponse.class
+                            );
+
+            WeatherForecast forecast =
+                    forecastMapper.toDomain(
+                            response,
+                            query
+                    );
+
+            log.debug(
+                    "Five-day forecast mapped successfully: "
+                            + "city={}, slices={}",
+                    forecast.location().city(),
+                    forecast.slices().size()
+            );
+
+            return forecast;
+
+        } catch (RestClientResponseException exception) {
+            throw mapResponseException(
+                    exception,
+                    query
+            );
+
+        } catch (ResourceAccessException exception) {
+            throw mapResourceAccessException(
+                    exception
+            );
+
+        } catch (RestClientException exception) {
+            throw unavailableException(
                     exception
             );
         }
@@ -121,6 +204,13 @@ public class OpenWeatherAdapter
     ) {
         int statusCode =
                 exception.getStatusCode().value();
+
+        log.warn(
+                "OpenWeather returned error status: "
+                        + "status={}, city={}",
+                statusCode,
+                query.city()
+        );
 
         return switch (statusCode) {
             case 400 ->
@@ -184,6 +274,18 @@ public class OpenWeatherAdapter
                 WeatherProviderException.FailureType
                         .UNAVAILABLE,
                 "OpenWeather could not be reached.",
+                exception
+        );
+    }
+
+    private WeatherProviderException
+    unavailableException(
+            RestClientException exception
+    ) {
+        return new WeatherProviderException(
+                WeatherProviderException.FailureType
+                        .UNAVAILABLE,
+                "Unable to communicate with OpenWeather.",
                 exception
         );
     }

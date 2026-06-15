@@ -1,118 +1,123 @@
-  server:
-    port: ${PORT:8080}
-    forward-headers-strategy: framework
-    shutdown: graceful
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+  shutdown: graceful
 
-  spring:
-    application:
-      name: weather-bridge
+spring:
+  application:
+    name: weather-bridge
 
-    lifecycle:
-      timeout-per-shutdown-phase: 20s
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
 
-    cache:
-      type: redis
+  cache:
+    type: redis
 
-      cache-names:
-        - current-weather
-        - weather-forecast
-        - temperature-alert
+    cache-names:
+      - current-weather
+      - weather-forecast
+      - temperature-alert
 
-      redis:
-        time-to-live: ${DEFAULT_CACHE_TTL:10m}
-        cache-null-values: false
-        use-key-prefix: true
-        key-prefix: "weather-bridge::"
+    redis:
+      # TTL utilizado como fallback para caches sem configuração específica.
+      time-to-live: ${DEFAULT_CACHE_TTL:10m}
+      cache-null-values: false
+      use-key-prefix: true
+      enable-statistics: ${CACHE_STATISTICS_ENABLED:true}
 
-    data:
-      redis:
-        host: ${REDIS_HOST:localhost}
-        port: ${REDIS_PORT:6379}
-        database: ${REDIS_DATABASE:0}
+  data:
+    redis:
+      client-type: lettuce
 
-        connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
-        timeout: ${REDIS_COMMAND_TIMEOUT:2s}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DATABASE:0}
 
-        repositories:
-          enabled: false
+      username: ${REDIS_USERNAME:}
+      password: ${REDIS_PASSWORD:}
 
-        lettuce:
-          pool:
-            enabled: true
-            max-active: ${REDIS_POOL_MAX_ACTIVE:8}
-            max-idle: ${REDIS_POOL_MAX_IDLE:8}
-            min-idle: ${REDIS_POOL_MIN_IDLE:0}
-            max-wait: ${REDIS_POOL_MAX_WAIT:2s}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
+      timeout: ${REDIS_COMMAND_TIMEOUT:2s}
 
-  open-weather:
-    base-url: ${OPENWEATHER_BASE_URL:https://api.openweathermap.org/data/2.5}
-    api-key: ${OPENWEATHER_API_KEY}
-    units: ${OPENWEATHER_UNITS:metric}
-    language: ${OPENWEATHER_LANGUAGE:en}
-    connect-timeout: ${OPENWEATHER_CONNECT_TIMEOUT:2s}
-    read-timeout: ${OPENWEATHER_READ_TIMEOUT:5s}
+      repositories:
+        enabled: false
 
-  weather:
-    api:
-      default-country-code: ${WEATHER_DEFAULT_COUNTRY_CODE:BR}
-      maximum-city-length: ${WEATHER_MAXIMUM_CITY_LENGTH:100}
+      lettuce:
+        shutdown-timeout: ${REDIS_SHUTDOWN_TIMEOUT:100ms}
 
-    cache:
-      current-weather-ttl: ${CURRENT_WEATHER_CACHE_TTL:10m}
-      forecast-ttl: ${FORECAST_CACHE_TTL:30m}
-      alert-deduplication-ttl: ${WEATHER_ALERT_CACHE_TTL:30m}
-
-    alert:
-      enabled: ${WEATHER_ALERT_ENABLED:false}
-      threshold-celsius: ${WEATHER_ALERT_THRESHOLD_CELSIUS:35}
-      webhook-url: ${WEATHER_ALERT_WEBHOOK_URL:}
-      connect-timeout: ${WEATHER_ALERT_CONNECT_TIMEOUT:2s}
-      read-timeout: ${WEATHER_ALERT_READ_TIMEOUT:5s}
-
-  app:
-    correlation-id:
-      request-header: ${CORRELATION_ID_REQUEST_HEADER:X-Correlation-ID}
-      response-header: ${CORRELATION_ID_RESPONSE_HEADER:X-Correlation-ID}
-
-  management:
-    endpoints:
-      web:
-        exposure:
-          include:
-            - health
-            - info
-            - metrics
-
-    endpoint:
-      health:
-        show-details: ${MANAGEMENT_HEALTH_SHOW_DETAILS:never}
-        probes:
+        pool:
           enabled: true
+          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${REDIS_POOL_MAX_IDLE:8}
+          min-idle: ${REDIS_POOL_MIN_IDLE:0}
+          max-wait: ${REDIS_POOL_MAX_WAIT:2s}
+          time-between-eviction-runs: ${REDIS_POOL_EVICTION_INTERVAL:30s}
 
+open-weather:
+  base-url: ${OPENWEATHER_BASE_URL:https://api.openweathermap.org/data/2.5}
+  api-key: ${OPENWEATHER_API_KEY}
+  units: ${OPENWEATHER_UNITS:metric}
+  language: ${OPENWEATHER_LANGUAGE:en}
+  connect-timeout: ${OPENWEATHER_CONNECT_TIMEOUT:2s}
+  read-timeout: ${OPENWEATHER_READ_TIMEOUT:5s}
+
+weather:
+  cache:
+    current-weather-ttl: ${CURRENT_WEATHER_CACHE_TTL:10m}
+    forecast-ttl: ${FORECAST_CACHE_TTL:30m}
+    alert-deduplication-ttl: ${WEATHER_ALERT_CACHE_TTL:30m}
+
+  alert:
+    enabled: ${WEATHER_ALERT_ENABLED:false}
+    threshold-celsius: ${WEATHER_ALERT_THRESHOLD_CELSIUS:35}
+    webhook-url: ${WEATHER_ALERT_WEBHOOK_URL:}
+    connect-timeout: ${WEATHER_ALERT_CONNECT_TIMEOUT:2s}
+    read-timeout: ${WEATHER_ALERT_READ_TIMEOUT:5s}
+
+app:
+  correlation-id:
+    request-header: ${CORRELATION_ID_REQUEST_HEADER:X-Correlation-ID}
+    response-header: ${CORRELATION_ID_RESPONSE_HEADER:X-Correlation-ID}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - metrics
+          - caches
+
+  endpoint:
     health:
-      redis:
+      show-details: ${MANAGEMENT_HEALTH_SHOW_DETAILS:never}
+      probes:
         enabled: true
 
-    metrics:
-      tags:
-        application: ${spring.application.name}
+  health:
+    redis:
+      enabled: true
 
-  logging:
-    level:
-      root: INFO
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
-      com.weatherbridge: ${APPLICATION_LOG_LEVEL:DEBUG}
+logging:
+  level:
+    root: INFO
 
-      org.springframework.web: INFO
-      org.springframework.web.client: INFO
-      org.springframework.cache: ${CACHE_LOG_LEVEL:INFO}
-      org.springframework.data.redis: ${REDIS_LOG_LEVEL:INFO}
+    com.weatherbridge: ${APPLICATION_LOG_LEVEL:DEBUG}
 
-    pattern:
-      console: >-
-        %d{yyyy-MM-dd HH:mm:ss.SSS}
-        [%thread]
-        %-5level
-        [correlationId=%X{correlationId:-}]
-        %logger{40} - %msg%n
+    org.springframework.web: INFO
+    org.springframework.web.client: INFO
+    org.springframework.cache: ${CACHE_LOG_LEVEL:INFO}
+    org.springframework.data.redis: ${REDIS_LOG_LEVEL:INFO}
 
+  pattern:
+    console: >-
+      %d{yyyy-MM-dd HH:mm:ss.SSS}
+      [%thread]
+      %-5level
+      [correlationId=%X{correlationId:-}]
+      %logger{40} - %msg%n

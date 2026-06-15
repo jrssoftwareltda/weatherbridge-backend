@@ -1,112 +1,118 @@
-server:
-  port: ${PORT:8080}
-  forward-headers-strategy: framework
-  shutdown: graceful
+  server:
+    port: ${PORT:8080}
+    forward-headers-strategy: framework
+    shutdown: graceful
 
-spring:
-  application:
-    name: weather-bridge
+  spring:
+    application:
+      name: weather-bridge
 
-  lifecycle:
-    timeout-per-shutdown-phase: 20s
+    lifecycle:
+      timeout-per-shutdown-phase: 20s
 
-  cache:
-    type: redis
-    cache-names:
-      - current-weather
-      - weather-forecast
-      - temperature-alert
+    cache:
+      type: redis
 
-    redis:
-      time-to-live: ${DEFAULT_CACHE_TTL:10m}
-      cache-null-values: false
-      use-key-prefix: true
-      key-prefix: "weather-bridge::"
+      cache-names:
+        - current-weather
+        - weather-forecast
+        - temperature-alert
 
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      username: ${REDIS_USERNAME:}
-      password: ${REDIS_PASSWORD:}
-      database: ${REDIS_DATABASE:0}
-      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
-      timeout: ${REDIS_COMMAND_TIMEOUT:2s}
+      redis:
+        time-to-live: ${DEFAULT_CACHE_TTL:10m}
+        cache-null-values: false
+        use-key-prefix: true
+        key-prefix: "weather-bridge::"
 
-      lettuce:
-        pool:
+    data:
+      redis:
+        host: ${REDIS_HOST:localhost}
+        port: ${REDIS_PORT:6379}
+        database: ${REDIS_DATABASE:0}
+
+        connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
+        timeout: ${REDIS_COMMAND_TIMEOUT:2s}
+
+        repositories:
+          enabled: false
+
+        lettuce:
+          pool:
+            enabled: true
+            max-active: ${REDIS_POOL_MAX_ACTIVE:8}
+            max-idle: ${REDIS_POOL_MAX_IDLE:8}
+            min-idle: ${REDIS_POOL_MIN_IDLE:0}
+            max-wait: ${REDIS_POOL_MAX_WAIT:2s}
+
+  open-weather:
+    base-url: ${OPENWEATHER_BASE_URL:https://api.openweathermap.org/data/2.5}
+    api-key: ${OPENWEATHER_API_KEY}
+    units: ${OPENWEATHER_UNITS:metric}
+    language: ${OPENWEATHER_LANGUAGE:en}
+    connect-timeout: ${OPENWEATHER_CONNECT_TIMEOUT:2s}
+    read-timeout: ${OPENWEATHER_READ_TIMEOUT:5s}
+
+  weather:
+    api:
+      default-country-code: ${WEATHER_DEFAULT_COUNTRY_CODE:BR}
+      maximum-city-length: ${WEATHER_MAXIMUM_CITY_LENGTH:100}
+
+    cache:
+      current-weather-ttl: ${CURRENT_WEATHER_CACHE_TTL:10m}
+      forecast-ttl: ${FORECAST_CACHE_TTL:30m}
+      alert-deduplication-ttl: ${WEATHER_ALERT_CACHE_TTL:30m}
+
+    alert:
+      enabled: ${WEATHER_ALERT_ENABLED:false}
+      threshold-celsius: ${WEATHER_ALERT_THRESHOLD_CELSIUS:35}
+      webhook-url: ${WEATHER_ALERT_WEBHOOK_URL:}
+      connect-timeout: ${WEATHER_ALERT_CONNECT_TIMEOUT:2s}
+      read-timeout: ${WEATHER_ALERT_READ_TIMEOUT:5s}
+
+  app:
+    correlation-id:
+      request-header: ${CORRELATION_ID_REQUEST_HEADER:X-Correlation-ID}
+      response-header: ${CORRELATION_ID_RESPONSE_HEADER:X-Correlation-ID}
+
+  management:
+    endpoints:
+      web:
+        exposure:
+          include:
+            - health
+            - info
+            - metrics
+
+    endpoint:
+      health:
+        show-details: ${MANAGEMENT_HEALTH_SHOW_DETAILS:never}
+        probes:
           enabled: true
-          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
-          max-idle: ${REDIS_POOL_MAX_IDLE:8}
-          min-idle: ${REDIS_POOL_MIN_IDLE:0}
-          max-wait: ${REDIS_POOL_MAX_WAIT:2s}
 
-open-weather:
-  base-url: ${OPENWEATHER_BASE_URL:https://api.openweathermap.org/data/2.5}
-  api-key: ${OPENWEATHER_API_KEY:}
-  units: ${OPENWEATHER_UNITS:metric}
-  language: ${OPENWEATHER_LANGUAGE:en}
-  connect-timeout: ${OPENWEATHER_CONNECT_TIMEOUT:2s}
-  read-timeout: ${OPENWEATHER_READ_TIMEOUT:5s}
-
-weather:
-  api:
-    default-country-code: ${WEATHER_DEFAULT_COUNTRY_CODE:BR}
-    maximum-city-length: ${WEATHER_MAXIMUM_CITY_LENGTH:100}
-
-  cache:
-    current-weather-ttl: ${CURRENT_WEATHER_CACHE_TTL:10m}
-    forecast-ttl: ${FORECAST_CACHE_TTL:30m}
-    alert-deduplication-ttl: ${WEATHER_ALERT_CACHE_TTL:30m}
-
-  alert:
-    enabled: ${WEATHER_ALERT_ENABLED:false}
-    threshold-celsius: ${WEATHER_ALERT_THRESHOLD_CELSIUS:35}
-    webhook-url: ${WEATHER_ALERT_WEBHOOK_URL:}
-    connect-timeout: ${WEATHER_ALERT_CONNECT_TIMEOUT:2s}
-    read-timeout: ${WEATHER_ALERT_READ_TIMEOUT:5s}
-
-app:
-  correlation-id:
-    request-header: ${CORRELATION_ID_REQUEST_HEADER:X-Correlation-ID}
-    response-header: ${CORRELATION_ID_RESPONSE_HEADER:X-Correlation-ID}
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include:
-          - health
-          - info
-          - metrics
-
-  endpoint:
     health:
-      show-details: ${MANAGEMENT_HEALTH_SHOW_DETAILS:always}
-      probes:
+      redis:
         enabled: true
 
-  health:
-    redis:
-      enabled: true
+    metrics:
+      tags:
+        application: ${spring.application.name}
 
-  metrics:
-    tags:
-      application: ${spring.application.name}
+  logging:
+    level:
+      root: INFO
 
-logging:
-  level:
-    root: INFO
-    br.com.jrs.weatherbridge: ${APPLICATION_LOG_LEVEL:DEBUG}
-    org.springframework.web: INFO
-    org.springframework.web.client: INFO
-    org.springframework.cache: ${CACHE_LOG_LEVEL:INFO}
-    org.springframework.data.redis: ${REDIS_LOG_LEVEL:INFO}
+      com.weatherbridge: ${APPLICATION_LOG_LEVEL:DEBUG}
 
-  pattern:
-    console: >-
-      %d{yyyy-MM-dd HH:mm:ss.SSS}
-      [%thread]
-      %-5level
-      [correlationId=%X{correlationId:-}]
-      %logger{40} - %msg%n
+      org.springframework.web: INFO
+      org.springframework.web.client: INFO
+      org.springframework.cache: ${CACHE_LOG_LEVEL:INFO}
+      org.springframework.data.redis: ${REDIS_LOG_LEVEL:INFO}
+
+    pattern:
+      console: >-
+        %d{yyyy-MM-dd HH:mm:ss.SSS}
+        [%thread]
+        %-5level
+        [correlationId=%X{correlationId:-}]
+        %logger{40} - %msg%n
+

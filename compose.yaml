@@ -1,0 +1,54 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command:
+      - redis-server
+      - --appendonly
+      - "no"
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      PORT: 8080
+
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:?Defina OPENWEATHER_API_KEY no arquivo .env}
+      OPENWEATHER_BASE_URL: ${OPENWEATHER_BASE_URL:-https://api.openweathermap.org/data/2.5}
+      OPENWEATHER_UNITS: ${OPENWEATHER_UNITS:-metric}
+      OPENWEATHER_LANGUAGE: ${OPENWEATHER_LANGUAGE:-en}
+      OPENWEATHER_CONNECT_TIMEOUT: ${OPENWEATHER_CONNECT_TIMEOUT:-2s}
+      OPENWEATHER_READ_TIMEOUT: ${OPENWEATHER_READ_TIMEOUT:-5s}
+
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DATABASE: ${REDIS_DATABASE:-0}
+      REDIS_CONNECT_TIMEOUT: ${REDIS_CONNECT_TIMEOUT:-2s}
+      REDIS_COMMAND_TIMEOUT: ${REDIS_COMMAND_TIMEOUT:-2s}
+
+      CURRENT_WEATHER_CACHE_TTL: ${CURRENT_WEATHER_CACHE_TTL:-10m}
+      FORECAST_CACHE_TTL: ${FORECAST_CACHE_TTL:-30m}
+
+      WEATHER_ALERT_ENABLED: ${WEATHER_ALERT_ENABLED:-false}
+      WEATHER_ALERT_THRESHOLD_CELSIUS: ${WEATHER_ALERT_THRESHOLD_CELSIUS:-35}
+      WEATHER_ALERT_WEBHOOK_URL: ${WEATHER_ALERT_WEBHOOK_URL:-}
+      WEATHER_ALERT_CACHE_TTL: ${WEATHER_ALERT_CACHE_TTL:-30m}
+
+    depends_on:
+      redis:
+        condition: service_healthy

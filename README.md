@@ -1,25 +1,3 @@
-# WeatherBridge Backend
-
-WeatherBridge is a lightweight internal weather integration service built with Java 25 and Spring Boot.
-
-The application consumes the OpenWeather API, normalizes provider-specific responses, applies domain transformations, caches results in Redis, and exposes stable REST contracts for downstream services.
-
-## Technology Stack
-
-* Java 25
-* Spring Boot 4.0.5
-* Maven 3.9+
-* Spring MVC
-* Spring `RestClient`
-* Spring Cache
-* Redis
-* Spring Boot Actuator
-* Docker
-* Docker Compose
-* JUnit 5
-* Mockito
-* MockMvc
-
 ## Main Features
 
 * Current weather lookup by city
@@ -27,196 +5,81 @@ The application consumes the OpenWeather API, normalizes provider-specific respo
 * OpenWeather integration
 * Metric unit normalization
 * Wind-speed conversion from meters per second to kilometers per hour
-* Thermal sensation classification
+* Thermal-sensation classification
 * Precipitation-risk classification
 * Three-hour forecast aggregation into daily summaries
 * Timezone-aware forecast grouping
 * Redis-backed caching
-* Configurable cache TTL
+* Independent configurable cache TTLs
 * Standardized API errors using `ProblemDetail`
 * Provider authentication-error handling
 * Provider timeout handling
 * Provider rate-limit handling
 * Request correlation ID
+* Configurable temperature-threshold webhook
+* HTTP POST alert delivery
+* Redis-backed webhook deduplication
+* Best-effort webhook delivery
+* Conditional webhook activation
+* Configurable webhook connection and read timeouts
+* Correlation ID propagation to webhook consumers
 * Application health endpoint
 * Docker multi-stage build
 * Docker Compose local environment
-
-## REST Endpoints
-
-### Current Weather
-
-```http
-GET /api/v1/weather/current
-```
-
-Query parameters:
-
-| Parameter     | Required | Description                               |
-| ------------- | -------: | ----------------------------------------- |
-| `city`        |      Yes | City name                                 |
-| `stateCode`   |       No | Two-letter state code                     |
-| `countryCode` |       No | Two-letter country code; defaults to `BR` |
-
-Example:
-
-```bash
-curl --get \
-  "http://localhost:8080/api/v1/weather/current" \
-  --data-urlencode "city=Macapa" \
-  --data-urlencode "stateCode=AP" \
-  --data-urlencode "countryCode=BR"
-```
-
-Example response:
-
-```json
-{
-  "location": {
-    "city": "Macapá",
-    "stateCode": "AP",
-    "countryCode": "BR",
-    "latitude": 0.0349,
-    "longitude": -51.0694,
-    "timezoneOffsetSeconds": -10800
-  },
-  "observedAt": "2026-06-15T19:30:00Z",
-  "temperature": {
-    "value": 31.4,
-    "feelsLike": 36.2,
-    "difference": 4.8,
-    "unit": "CELSIUS",
-    "category": "VERY_HOT"
-  },
-  "humidityPercent": 72,
-  "atmosphericPressureHpa": 1009,
-  "windSpeedKmh": 13.7,
-  "cloudinessPercent": 40,
-  "condition": "Clouds",
-  "description": "scattered clouds",
-  "source": "OPEN_WEATHER"
-}
-```
-
-### Five-Day Weather Summary
-
-```http
-GET /api/v1/weather/forecast/5-days
-```
-
-Example:
-
-```bash
-curl --get \
-  "http://localhost:8080/api/v1/weather/forecast/5-days" \
-  --data-urlencode "city=Macapa" \
-  --data-urlencode "stateCode=AP" \
-  --data-urlencode "countryCode=BR"
-```
-
-Example response:
-
-```json
-{
-  "location": {
-    "city": "Macapá",
-    "stateCode": "AP",
-    "countryCode": "BR",
-    "latitude": 0.0349,
-    "longitude": -51.0694,
-    "timezoneOffsetSeconds": -10800
-  },
-  "generatedAt": "2026-06-15T19:35:00Z",
-  "days": [
-    {
-      "date": "2026-06-15",
-      "minimumTemperatureCelsius": 24.1,
-      "maximumTemperatureCelsius": 32.7,
-      "averageTemperatureCelsius": 28.3,
-      "averageFeelsLikeCelsius": 33.5,
-      "averageHumidityPercent": 76,
-      "maximumPrecipitationProbabilityPercent": 78.0,
-      "precipitationRisk": "HIGH",
-      "totalPrecipitationMillimeters": 8.4,
-      "maximumWindSpeedKmh": 21.6,
-      "dominantCondition": "Rain"
-    }
-  ],
-  "source": "OPEN_WEATHER"
-}
-```
 
 ## Architecture
 
 WeatherBridge uses a lightweight Hexagonal Architecture, also known as Ports and Adapters Architecture.
 
-The main goal is to isolate application and domain rules from external technologies such as HTTP, OpenWeather, Redis, and Spring MVC.
-
-### Architecture Diagram
+The architecture separates business rules and use-case orchestration from external technologies such as Spring MVC, OpenWeather, Redis, HTTP webhooks, and Docker.
 
 ![WeatherBridge Hexagonal Architecture](docs/architecture/weatherbridge_hexagonal_architecture.png)
 
-### Architectural Overview
+The primary dependency flow is:
 
 ```text
-                           External Clients
-                                  |
-                                  v
-                    +---------------------------+
-                    |       Input Adapter       |
-                    |                           |
-                    |     WeatherController     |
-                    | GlobalExceptionHandler    |
-                    |  CorrelationIdFilter      |
-                    +-------------+-------------+
-                                  |
-                            Input Ports
-                                  |
-                                  v
-                    +---------------------------+
-                    |     Application Layer     |
-                    |                           |
-                    | WeatherQueryService       |
-                    | GetCurrentWeatherUseCase  |
-                    | GetFiveDayWeatherUseCase  |
-                    +-------------+-------------+
-                                  |
-                                  v
-                    +---------------------------+
-                    |       Domain Layer        |
-                    |                           |
-                    | CurrentWeather            |
-                    | WeatherForecast           |
-                    | DailyWeatherSummary       |
-                    | ThermalSensationPolicy    |
-                    | PrecipitationRiskPolicy   |
-                    | ForecastAggregationService|
-                    +-------------+-------------+
-                                  |
-                           Output Ports
-                                  |
-                                  v
-              +-------------------+-------------------+
-              |                                       |
-              v                                       v
-    +-----------------------+              +-----------------------+
-    | OpenWeather Adapter   |              |     Redis Cache       |
-    |                       |              |                       |
-    | OpenWeatherAdapter    |              | Spring Cache          |
-    | OpenWeatherMapper     |              | RedisCacheManager     |
-    | ForecastMapper        |              | Configurable TTL      |
-    +-----------+-----------+              +-----------------------+
-                |
-                v
-      +---------------------+
-      |   OpenWeather API   |
-      |                     |
-      | /data/2.5/weather   |
-      | /data/2.5/forecast  |
-      +---------------------+
+External Client
+      ↓
+Input Adapter
+      ↓
+Input Port
+      ↓
+Application Service
+      ↓
+Output Port
+      ↓
+Output Adapter
+      ↓
+External System
 ```
 
-### Domain Layer
+The current-weather flow can also trigger a secondary best-effort alert flow:
+
+```text
+WeatherController
+        ↓
+GetCurrentWeatherUseCase
+        ↓
+WeatherQueryService
+        ↓
+WeatherProviderPort
+        ↓
+OpenWeatherAdapter
+        ↓
+OpenWeather API
+        ↓
+CurrentWeather
+        ↓
+TemperatureAlertService
+        ↓
+WeatherAlertPort
+        ↓
+HttpWeatherAlertAdapter
+        ↓
+External Webhook Consumer
+```
+
+## Domain Layer
 
 The domain layer contains business concepts and deterministic transformation rules.
 
@@ -234,17 +97,30 @@ Main components:
 * `ThermalSensationPolicy`
 * `PrecipitationRiskPolicy`
 * `ForecastAggregationService`
+* `TemperatureThresholdPolicy`
 
-This layer does not depend directly on:
+The `TemperatureThresholdPolicy` determines whether a temperature alert must be generated.
+
+The comparison is strictly greater than:
+
+```text
+temperatureCelsius > thresholdCelsius
+```
+
+A temperature equal to the configured threshold does not trigger an alert.
+
+The domain layer does not depend directly on:
 
 * Spring MVC
-* HTTP
+* Spring Cache
+* HTTP clients
 * Redis
 * OpenWeather DTOs
+* webhook DTOs
 * Docker
-* Controller response classes
+* controller response classes
 
-### Application Layer
+## Application Layer
 
 The application layer coordinates use cases and depends on abstractions.
 
@@ -256,40 +132,28 @@ Input ports:
 Output ports:
 
 * `WeatherProviderPort`
+* `WeatherAlertPort`
 
-Application service:
+Application services:
 
 * `WeatherQueryService`
+* `TemperatureAlertService`
 
-The application service does not know how OpenWeather is called. It only depends on `WeatherProviderPort`.
+`WeatherQueryService` coordinates current-weather and five-day forecast operations through `WeatherProviderPort`.
 
-### Input Adapters
+`TemperatureAlertService` evaluates the configured threshold after a successful current-weather query.
 
-Input adapters expose the application to external consumers.
+When the current temperature exceeds the threshold, the service creates a `TemperatureAlert` and delegates delivery to `WeatherAlertPort`.
 
-Main components:
+Webhook delivery is treated as a best-effort side effect. A webhook failure is logged but does not invalidate an otherwise successful current-weather response.
 
-* `WeatherController`
-* `CurrentWeatherResponse`
-* `FiveDayWeatherResponse`
-* `GlobalExceptionHandler`
-* `CorrelationIdFilter`
-
-Responsibilities:
-
-* receive HTTP requests;
-* normalize query parameters;
-* call input ports;
-* map domain objects to API contracts;
-* return HTTP responses;
-* convert exceptions into standardized errors;
-* propagate correlation IDs.
-
-### Output Adapters
+## Output Adapters
 
 Output adapters implement communication with external systems.
 
 Main components:
+
+### OpenWeather integration
 
 * `OpenWeatherAdapter`
 * `OpenWeatherMapper`
@@ -299,232 +163,136 @@ Main components:
 
 Responsibilities:
 
-* call OpenWeather endpoints;
-* add the API key and query parameters;
+* call the OpenWeather endpoints;
+* add API-key and query parameters;
 * translate provider status codes;
-* map external DTOs to domain models;
+* map provider DTOs to domain models;
 * normalize units;
-* protect the application from provider-specific contracts.
+* isolate the application from provider-specific contracts.
 
-### Dependency Direction
+### Temperature alert integration
 
-Dependencies point inward:
+* `HttpWeatherAlertAdapter`
+* `NoOpWeatherAlertAdapter`
+* `TemperatureAlertWebhookPayload`
 
-```text
-Adapters → Application → Domain
-```
+Responsibilities:
 
-The domain does not depend on adapters.
+* activate webhook delivery conditionally;
+* send temperature alerts using HTTP POST;
+* propagate the request correlation ID;
+* apply connection and read timeouts;
+* deduplicate successful alerts using Redis;
+* avoid caching failed webhook deliveries;
+* provide a no-operation implementation when alerts are disabled;
+* prevent webhook failures from breaking weather responses.
 
-The application does not depend on OpenWeather implementation details.
+## Temperature Alert Webhook
 
-The OpenWeather adapter implements a port defined by the application layer.
+WeatherBridge can send an HTTP POST notification when the current temperature exceeds a configurable threshold.
 
-### Why Hexagonal Architecture?
-
-The architecture was selected because it provides:
-
-* clear separation of concerns;
-* external-provider isolation;
-* stable internal contracts;
-* testable domain rules;
-* replaceable infrastructure;
-* easier failure simulation;
-* reduced coupling with OpenWeather;
-* easier migration to another weather provider;
-* easier substitution of Redis by another cache technology.
-
-### Architecture Tradeoff
-
-For this challenge, the architecture remains inside a single Maven module.
-
-This avoids unnecessary complexity such as:
-
-* multiple Maven modules;
-* generic frameworks;
-* event brokers;
-* database persistence;
-* excessive interfaces;
-* distributed workflow orchestration.
-
-The objective is to obtain architectural boundaries without overengineering.
-
-## Data Transformation
-
-### Temperature
-
-OpenWeather data is requested in metric units.
-
-The API returns:
-
-* current temperature in Celsius;
-* feels-like temperature in Celsius;
-* minimum temperature in Celsius;
-* maximum temperature in Celsius.
-
-### Wind Speed
-
-OpenWeather returns wind speed in meters per second.
-
-WeatherBridge converts it to kilometers per hour:
+The alert is evaluated after a successful current-weather lookup:
 
 ```text
-windSpeedKmh = windSpeedMetersPerSecond × 3.6
+Current weather obtained
+        ↓
+Threshold evaluated
+        ↓
+temperature > configured threshold?
+        |
+        +-- No  → no webhook
+        |
+        +-- Yes → send HTTP POST
 ```
 
-### Thermal Sensation
+The webhook is configured through `application.yml`:
 
-The feels-like temperature is classified as:
+```yaml
+weather:
+  alert:
+    enabled: ${WEATHER_ALERT_ENABLED:false}
+    threshold-celsius: ${WEATHER_ALERT_THRESHOLD_CELSIUS:35}
+    webhook-url: ${WEATHER_ALERT_WEBHOOK_URL:}
+    connect-timeout: ${WEATHER_ALERT_CONNECT_TIMEOUT:2s}
+    read-timeout: ${WEATHER_ALERT_READ_TIMEOUT:5s}
+```
 
-| Feels-like temperature | Category    |
-| ---------------------: | ----------- |
-|              Below 5°C | `VERY_COLD` |
-|          5°C to 14.9°C | `COLD`      |
-|         15°C to 22.9°C | `MILD`      |
-|         23°C to 27.9°C | `WARM`      |
-|         28°C to 32.9°C | `HOT`       |
-|          33°C or above | `VERY_HOT`  |
+Example payload:
 
-These thresholds are application-defined business classifications.
+```json
+{
+  "event": "TEMPERATURE_THRESHOLD_EXCEEDED",
+  "location": {
+    "city": "Macapá",
+    "stateCode": "AP",
+    "countryCode": "BR",
+    "latitude": 0.0349,
+    "longitude": -51.0694
+  },
+  "temperatureCelsius": 35.7,
+  "feelsLikeCelsius": 41.2,
+  "thresholdCelsius": 35.0,
+  "observedAt": "2026-06-16T00:00:00Z",
+  "correlationId": "030c6f12-6b78-4132-a4b0-b5ba39e56a15"
+}
+```
 
-### Precipitation Risk
+The threshold comparison is:
 
-The daily precipitation risk uses the highest precipitation probability found in that day.
+```text
+temperatureCelsius > thresholdCelsius
+```
 
-| Probability | Risk        |
-| ----------: | ----------- |
-|   0% to 29% | `LOW`       |
-|  30% to 59% | `MODERATE`  |
-|  60% to 79% | `HIGH`      |
-| 80% to 100% | `VERY_HIGH` |
+A temperature equal to the threshold does not trigger an alert.
 
-The maximum probability is used instead of the average because an average could hide a short period with a high rain probability.
+Webhook delivery is best-effort. Connection errors, timeouts, and non-successful HTTP responses are logged, but the current-weather endpoint still returns its successful response.
 
-### Daily Forecast Aggregation
-
-The OpenWeather five-day endpoint returns forecast entries in three-hour intervals.
-
-WeatherBridge groups entries by the local date of the requested city.
-
-For each date, the application calculates:
-
-* minimum temperature;
-* maximum temperature;
-* average temperature;
-* average feels-like temperature;
-* average humidity;
-* maximum precipitation probability;
-* total precipitation volume;
-* maximum wind speed;
-* dominant weather condition;
-* precipitation-risk category.
-
-The city timezone offset is applied before grouping timestamps into dates.
+When alerts are disabled, `NoOpWeatherAlertAdapter` satisfies the `WeatherAlertPort` contract without performing an HTTP request.
 
 ## Caching Strategy
 
-Redis is used to prevent redundant OpenWeather calls.
+Caching is applied at two output-adapter boundaries.
 
-Cache names:
+### Weather provider cache
+
+The following caches prevent redundant OpenWeather calls:
+
+* `current-weather`
+* `weather-forecast`
+
+The provider cache stores normalized domain results instead of raw OpenWeather DTOs.
+
+### Temperature alert cache
+
+The `temperature-alert` cache prevents the same location and threshold from generating repeated webhook deliveries during the configured TTL.
+
+Example deduplication key:
 
 ```text
-current-weather
-weather-forecast
-temperature-alert
+macapa:ap:br:threshold:35
 ```
+
+A successful webhook delivery is cached.
+
+Failed deliveries are not cached, allowing a later weather request to attempt delivery again.
 
 Default TTL values:
 
-| Cache             |        TTL |
-| ----------------- | ---------: |
-| Current weather   | 10 minutes |
-| Five-day forecast | 30 minutes |
-| Temperature alert | 30 minutes |
-
-Example normalized cache key:
-
-```text
-macapa:ap:br
-```
-
-The cache is applied at the OpenWeather adapter boundary.
+| Cache               | Default TTL |
+| ------------------- | ----------: |
+| `current-weather`   |  10 minutes |
+| `weather-forecast`  |  30 minutes |
+| `temperature-alert` |  30 minutes |
 
 This means:
 
 * use cases remain independent of Spring Cache;
 * provider calls are cached;
 * normalized domain results are reused;
-* external DTOs do not leak into the cache contract.
-
-## Error Handling
-
-The API uses `ProblemDetail` and centralized exception handling.
-
-Examples:
-
-| Situation                   | HTTP status | Internal code                           |
-| --------------------------- | ----------: | --------------------------------------- |
-| Invalid query parameter     |       `400` | `INVALID_REQUEST`                       |
-| City not found              |       `404` | `CITY_NOT_FOUND`                        |
-| Invalid OpenWeather API key |       `502` | `WEATHER_PROVIDER_AUTHENTICATION_ERROR` |
-| OpenWeather rate limit      |       `503` | `WEATHER_PROVIDER_RATE_LIMITED`         |
-| OpenWeather timeout         |       `504` | `WEATHER_PROVIDER_TIMEOUT`              |
-| OpenWeather unavailable     |       `502` | `WEATHER_PROVIDER_UNAVAILABLE`          |
-| Invalid provider payload    |       `502` | `INVALID_PROVIDER_RESPONSE`             |
-| Unexpected error            |       `500` | `INTERNAL_ERROR`                        |
-
-Example:
-
-```json
-{
-  "detail": "OpenWeather rejected the configured API key.",
-  "instance": "/api/v1/weather/current",
-  "status": 502,
-  "title": "Weather provider authentication error",
-  "type": "urn:weatherbridge:error:weather_provider_authentication_error",
-  "code": "WEATHER_PROVIDER_AUTHENTICATION_ERROR",
-  "timestamp": "2026-06-15T19:08:24.629973555Z",
-  "correlationId": "f5303214-fd32-4879-9b92-b5e081d6163b"
-}
-```
-
-## Observability
-
-The application provides:
-
-* correlation IDs;
-* structured contextual logs;
-* operation duration;
-* request parameters;
-* provider failure classification;
-* forecast aggregation logs;
-* thermal classification logs;
-* precipitation-risk classification logs;
-* Actuator health endpoint;
-* Redis health indicator;
-* metrics endpoint.
-
-Actuator endpoints:
-
-```text
-/actuator/health
-/actuator/info
-/actuator/metrics
-```
-
-The OpenWeather API key must never be written to logs.
-
-## Requirements
-
-For local execution:
-
-* JDK 25
-* Maven 3.9+
-* Docker
-* Docker Compose
-* OpenWeather API key
-
-The Docker build does not require Maven to be installed on the host because Maven runs in the Docker build stage.
+* webhook alerts are deduplicated;
+* failed webhook deliveries remain eligible for retry;
+* each cache has an independent configurable TTL;
+* external DTOs do not leak into cache contracts.
 
 ## Configure Environment
 
@@ -534,19 +302,27 @@ Create the local environment file:
 cp .env.example .env
 ```
 
-Edit `.env.local`:
+Edit `.env`:
 
 ```dotenv
 OPENWEATHER_API_KEY=your-real-api-key
 
 REDIS_HOST=redis
 REDIS_PORT=6379
+REDIS_DATABASE=0
 
 CURRENT_WEATHER_CACHE_TTL=10m
 FORECAST_CACHE_TTL=30m
+
+WEATHER_ALERT_ENABLED=false
+WEATHER_ALERT_THRESHOLD_CELSIUS=35
+WEATHER_ALERT_WEBHOOK_URL=
+WEATHER_ALERT_CONNECT_TIMEOUT=2s
+WEATHER_ALERT_READ_TIMEOUT=5s
+WEATHER_ALERT_CACHE_TTL=30m
 ```
 
-Do not commit `.env.local`.
+Do not commit `.env`.
 
 Recommended `.gitignore` entries:
 
@@ -557,510 +333,221 @@ Recommended `.gitignore` entries:
 !.env.example
 ```
 
-## Build Locally
+For local webhook testing, with the API running in Docker and the webhook receiver running on macOS, use:
 
-```bash
-mvn clean install
+```dotenv
+WEATHER_ALERT_ENABLED=true
+WEATHER_ALERT_THRESHOLD_CELSIUS=20
+WEATHER_ALERT_WEBHOOK_URL=http://host.docker.internal:9090/alerts
 ```
 
-Expected artifact:
+`host.docker.internal` allows the application container to reach the host machine.
+
+## Observability
+
+The application provides:
+
+* request correlation IDs;
+* structured contextual logs;
+* operation duration;
+* request parameters;
+* provider failure classification;
+* forecast aggregation logs;
+* thermal-classification logs;
+* precipitation-risk classification logs;
+* temperature-threshold evaluation logs;
+* webhook delivery lifecycle logs;
+* webhook timeout and connection-failure logs;
+* webhook HTTP status logs;
+* webhook delivery duration;
+* webhook correlation ID propagation;
+* alert deduplication through Redis;
+* Actuator health endpoint;
+* Redis health indicator;
+* metrics endpoint.
+
+Actuator endpoints:
 
 ```text
-target/weatherbridge-backend-0.0.1-SNAPSHOT.jar
+/actuator/health
+/actuator/info
+/actuator/metrics
+/actuator/caches
 ```
 
-## Run Redis and the API with Docker
+Sensitive configuration values must not be written to logs.
 
-Stop existing containers:
+This includes:
+
+* OpenWeather API keys;
+* webhook URLs containing tokens;
+* authorization headers;
+* credentials embedded in URLs.
+
+## Test the Temperature Alert Webhook
+
+Start the local webhook receiver:
 
 ```bash
-docker compose \
-  --env-file .env.local \
-  down --remove-orphans
+python3 webhook-receiver.py
 ```
 
-Build without cache:
-
-```bash
-docker compose \
-  --env-file .env.local \
-  build --no-cache
-```
-
-Start the services:
-
-```bash
-docker compose \
-  --env-file .env.local \
-  up
-```
-
-Run in detached mode:
-
-```bash
-docker compose \
-  --env-file .env.local \
-  up --build -d
-```
-
-View API logs:
-
-```bash
-docker compose \
-  --env-file .env.local \
-  logs -f api
-```
-
-## Verify Services
-
-List services:
-
-```bash
-docker compose \
-  --env-file .env.local \
-  ps
-```
-
-Test Redis:
-
-```bash
-docker compose exec redis redis-cli ping
-```
-
-Expected:
-
-```text
-PONG
-```
-
-Test Actuator:
-
-```bash
-curl http://localhost:8080/actuator/health
-```
-
-Expected:
-
-```json
-{
-  "status": "UP"
-}
-```
-
-## Test the Endpoints
-
-Current weather:
-
-```bash
-curl --silent --get \
-  "http://localhost:8080/api/v1/weather/current" \
-  --data-urlencode "city=Macapa" \
-  --data-urlencode "stateCode=AP" \
-  --data-urlencode "countryCode=BR" | jq
-```
-
-Five-day summary:
-
-```bash
-curl --silent --get \
-  "http://localhost:8080/api/v1/weather/forecast/5-days" \
-  --data-urlencode "city=Macapa" \
-  --data-urlencode "stateCode=AP" \
-  --data-urlencode "countryCode=BR" | jq
-```
-
-## Demonstrate Cache Behavior
-
-Clear Redis:
+Clear Redis before the test:
 
 ```bash
 docker compose exec redis redis-cli FLUSHALL
 ```
 
-Make the first request:
+Request current weather:
 
 ```bash
 curl --silent --get \
   "http://localhost:8080/api/v1/weather/current" \
   --data-urlencode "city=Macapa" \
   --data-urlencode "stateCode=AP" \
-  --data-urlencode "countryCode=BR" > /dev/null
+  --data-urlencode "countryCode=BR" | jq
 ```
 
-Inspect keys:
+Inspect the alert cache:
 
 ```bash
-docker compose exec redis redis-cli --scan
+docker compose exec redis \
+  redis-cli --scan \
+  --pattern "*temperature-alert*"
 ```
 
-Repeat the same request:
+Expected key:
+
+```text
+weather-bridge::temperature-alert::macapa:ap:br:threshold:20
+```
+
+Run the same weather request again.
+
+The first request should produce one webhook POST. The second request must not produce another POST while the deduplication TTL is active.
+
+Verify the TTL:
 
 ```bash
-curl --silent --get \
-  "http://localhost:8080/api/v1/weather/current" \
-  --data-urlencode "city=Macapa" \
-  --data-urlencode "stateCode=AP" \
-  --data-urlencode "countryCode=BR" > /dev/null
+docker compose exec redis \
+  redis-cli TTL \
+  "weather-bridge::temperature-alert::macapa:ap:br:threshold:20"
 ```
 
-The OpenWeather adapter log should appear only for the first request while the cached entry is valid.
+With the default alert TTL, the returned value should initially be close to:
+
+```text
+1800
+```
+
+To verify best-effort behavior:
+
+1. stop the local webhook receiver;
+2. clear Redis;
+3. request current weather again;
+4. confirm the endpoint still returns `200 OK`;
+5. confirm the webhook failure appears in the application logs.
 
 ## Technical Presentation Guide
 
-Suggested presentation duration: 10–15 minutes.
+### Temperature Alert Webhook
 
-### 1. Business Scenario and Requirements
+Present the complete flow:
 
-Explain:
+1. current weather is obtained;
+2. `TemperatureAlertService` evaluates the threshold;
+3. `TemperatureThresholdPolicy` applies the business rule;
+4. `WeatherAlertPort` isolates the application from HTTP;
+5. `HttpWeatherAlertAdapter` sends the POST;
+6. Redis deduplicates successful deliveries;
+7. the correlation ID is propagated;
+8. webhook failures do not break the weather response.
 
-* why downstream services should not consume OpenWeather directly;
-* the need for stable internal contracts;
-* the two REST endpoints;
-* the need for transformation, caching, and error handling;
-* the optional webhook requirement;
-* the importance of rate-limit protection.
+Technical topics:
 
-Technical points:
-
-* external API coupling;
-* provider-contract instability;
-* anti-corruption layer;
-* latency reduction;
-* quota protection;
-* normalized data contracts.
-
-### 2. Technology Decisions
-
-Present:
-
-* Java 25;
-* Spring Boot 4;
-* Spring MVC;
+* conditional bean creation;
+* `HttpWeatherAlertAdapter` versus `NoOpWeatherAlertAdapter`;
+* configurable threshold;
 * Spring `RestClient`;
-* Redis;
-* Docker;
-* Docker Compose;
-* Actuator.
+* connection and read timeouts;
+* best-effort side effects;
+* Redis deduplication;
+* alert cache-key design;
+* retry eligibility after failure;
+* synchronous-delivery tradeoff;
+* separation between provider caching and alert deduplication.
 
-Explain why Spring MVC was chosen instead of WebFlux:
+Suggested live demonstration:
 
-* synchronous integration;
-* low expected concurrency for the challenge;
-* simpler execution model;
-* lower cognitive overhead;
-* easier debugging and demonstration.
+1. start the webhook receiver;
+2. configure a low threshold;
+3. clear Redis;
+4. request current weather;
+5. show the received payload;
+6. repeat the request;
+7. demonstrate that no second webhook is sent;
+8. inspect the Redis key and TTL;
+9. stop the webhook receiver;
+10. demonstrate that the weather endpoint continues returning successfully.
 
-Explain why `RestClient` was selected:
+## Testing Strategy
 
-* fluent synchronous API;
-* integration with Spring Boot;
-* status-code handling;
-* request factory customization;
-* configurable connection and read timeouts.
-
-### 3. Hexagonal Architecture
-
-Show the customized architecture diagram.
-
-Explain the dependency flow:
-
-```text
-HTTP Adapter
-    ↓
-Input Port
-    ↓
-Application Service
-    ↓
-Output Port
-    ↓
-OpenWeather Adapter
-```
-
-Technical topics:
-
-* ports and adapters;
-* dependency inversion;
-* domain isolation;
-* provider independence;
-* testability;
-* anti-corruption boundary;
-* single-module architecture;
-* avoidance of overengineering.
-
-Demonstrate that:
-
-* `WeatherQueryService` does not know OpenWeather;
-* `WeatherProviderPort` belongs to the application layer;
-* `OpenWeatherAdapter` implements the port;
-* provider DTOs remain inside the output adapter;
-* controllers only depend on input ports.
-
-### 4. Current Weather Flow
-
-Walk through:
-
-1. `WeatherController`;
-2. `WeatherLocationQuery`;
-3. `GetCurrentWeatherUseCase`;
-4. `WeatherQueryService`;
-5. `WeatherProviderPort`;
-6. `OpenWeatherAdapter`;
-7. `OpenWeatherMapper`;
-8. domain response;
-9. `CurrentWeatherResponse`.
-
-Technical topics:
-
-* query normalization;
-* country defaulting;
-* cache-key normalization;
-* API-key injection;
-* HTTP timeout;
-* provider-response validation;
-* wind conversion;
-* thermal-sensation classification;
-* domain-to-HTTP mapping.
-
-### 5. Five-Day Summary Flow
-
-Explain that OpenWeather does not directly return one object per day.
-
-It returns multiple entries with three-hour intervals.
-
-Walk through:
-
-1. request to `/forecast`;
-2. mapping to `ForecastSlice`;
-3. conversion of Unix timestamps;
-4. application of city timezone offset;
-5. grouping by local date;
-6. daily aggregation;
-7. five-day limiting;
-8. API response mapping.
-
-Technical calculations:
-
-* minimum temperature;
-* maximum temperature;
-* arithmetic averages;
-* precipitation-volume sum;
-* maximum precipitation probability;
-* maximum wind speed;
-* condition frequency;
-* deterministic tie behavior;
-* precipitation-risk classification.
-
-### 6. Transformation Policies
-
-Present `ThermalSensationPolicy`.
-
-Explain:
-
-* why the rule belongs in the domain;
-* deterministic behavior;
-* boundary values;
-* independent unit testing;
-* no dependency on Spring.
-
-Present `PrecipitationRiskPolicy`.
-
-Explain:
-
-* percentage validation;
-* application-defined thresholds;
-* why maximum probability is used;
-* distinction between provider data and derived business information.
-
-### 7. Redis Cache
-
-Explain where caching is applied:
-
-```text
-WeatherQueryService
-    ↓
-WeatherProviderPort
-    ↓
-Cached OpenWeatherAdapter
-```
-
-Technical topics:
-
-* `@Cacheable`;
-* `sync = true`;
-* normalized keys;
-* TTL;
-* shared cache;
-* multiple application instances;
-* cache miss;
-* cache hit;
-* provider quota reduction;
-* cache serialization.
-
-Live demonstration:
-
-1. clear Redis;
-2. make the first request;
-3. show OpenWeather adapter log;
-4. inspect Redis keys;
-5. repeat request;
-6. show absence of a second provider call;
-7. display TTL.
-
-### 8. Error Handling
-
-Demonstrate:
-
-* missing `city`;
-* invalid country code;
-* nonexistent city;
-* invalid API key;
-* provider rate limit;
-* provider timeout.
-
-Explain the translation:
-
-```text
-OpenWeather 401
-    ↓
-WeatherProviderException.AUTHENTICATION
-    ↓
-GlobalExceptionHandler
-    ↓
-502 Bad Gateway
-```
-
-Technical topics:
-
-* `ProblemDetail`;
-* internal error codes;
-* external error isolation;
-* correlation ID;
-* no raw provider-body exposure;
-* no API-key logging;
-* distinction between client and upstream failures.
-
-### 9. Observability
-
-Show:
-
-* request correlation ID;
-* controller logs;
-* application-service logs;
-* adapter logs;
-* domain-policy logs;
-* aggregation duration;
-* provider failures;
-* `/actuator/health`;
-* Redis health status.
-
-Explain why logs exist at multiple boundaries:
-
-* controller: request context;
-* application service: use-case execution;
-* adapter: external integration;
-* domain service: transformation details;
-* exception handler: HTTP error translation.
-
-Also explain log-level strategy:
-
-* `INFO`: business operation lifecycle;
-* `DEBUG`: technical processing details;
-* `TRACE`: individual forecast slices and classification boundaries;
-* `WARN`: expected recoverable failures;
-* `ERROR`: unexpected or processing failures.
-
-### 10. Docker and Runtime
-
-Explain the multi-stage Dockerfile:
-
-```text
-Maven + JDK build image
-        ↓
-Compiled executable JAR
-        ↓
-Java 25 runtime image
-```
-
-Technical points:
-
-* dependency caching;
-* smaller final image;
-* source code excluded from runtime image;
-* non-root user;
-* environment-based configuration;
-* Redis health check;
-* Compose dependency ordering.
-
-### 11. Testing Strategy
-
-Present the recommended tests:
-
-Unit tests:
+Recommended unit tests:
 
 * `ThermalSensationPolicyTest`
 * `PrecipitationRiskPolicyTest`
 * `ForecastAggregationServiceTest`
+* `TemperatureThresholdPolicyTest`
+* `TemperatureAlertServiceTest`
 * `WeatherQueryServiceTest`
 
-Web tests:
+Recommended web tests:
 
 * `WeatherControllerTest`
 * `GlobalExceptionHandlerTest`
 
-Adapter tests:
+Recommended OpenWeather adapter tests:
 
-* successful OpenWeather mapping;
+* successful current-weather mapping;
+* successful forecast mapping;
 * city not found;
 * invalid API key;
 * provider timeout;
-* rate limit;
+* provider rate limit;
 * malformed provider payload.
 
-Important aggregation scenarios:
+Recommended webhook adapter tests:
 
-* timezone crossing midnight;
-* missing rain field;
-* missing snow field;
-* dominant-condition tie;
-* partial first forecast day;
-* exactly five returned days;
-* precipitation at threshold boundaries.
+* successful webhook delivery;
+* non-successful webhook response;
+* webhook connection failure;
+* webhook timeout;
+* correlation ID propagation;
+* alert deduplication;
+* retry after failed delivery;
+* disabled webhook using `NoOpWeatherAlertAdapter`.
 
-### 12. Tradeoffs
+Threshold scenarios:
 
-Acknowledge the main tradeoffs:
+* temperature below threshold;
+* temperature equal to threshold;
+* temperature above threshold;
+* invalid non-finite threshold;
+* threshold configuration change.
 
-* Redis adds infrastructure but supports shared cache;
-* MVC uses one thread during the external request;
-* no automatic retry avoids rate-limit amplification;
-* no database because permanent persistence is unnecessary;
-* one Maven module reduces project complexity;
-* thresholds are application-defined, not meteorological standards;
-* provider availability still affects cache misses;
-* webhook failures should not break the main weather response.
+## Tradeoffs
 
-### 13. Possible Improvements
-
-Mention:
-
-* OpenAPI and Swagger UI;
-* Testcontainers;
-* WireMock;
-* ArchUnit;
-* Redis JSON serialization configuration;
-* cache-key versioning;
-* stale-cache fallback;
-* circuit breaker;
-* selective retries;
-* Prometheus metrics;
-* OpenTelemetry tracing;
-* webhook signing;
-* asynchronous webhook delivery;
-* multiple weather providers;
-* API authentication;
-* request rate limiting;
-* CI/CD pipeline;
-* container-security scanning.
+* Redis adds infrastructure but enables shared caching and alert deduplication.
+* Spring MVC keeps the execution model simple but holds a request thread during external calls.
+* Webhook delivery is synchronous and adds latency when an alert is sent.
+* Best-effort delivery favors weather availability over guaranteed notification.
+* Redis deduplication prevents repeated alerts but does not provide durable event delivery.
+* Failed webhook deliveries are retried only when another weather request occurs.
+* No automatic provider retry avoids rate-limit amplification.
+* No database is used because permanent persistence is outside the challenge scope.
+* A single Maven module reduces structural complexity.
+* Temperature and precipitation thresholds are application-defined business rules.
+* Provider availability still affects cache misses.
 
 ## Important Notes
 
@@ -1068,10 +555,16 @@ Mention:
 * The project does not require `.mvn`, `mvnw`, or `mvnw.cmd`.
 * The final image runs with Java 25 and a numeric non-root user.
 * Docker Compose requires `OPENWEATHER_API_KEY`.
-* `.env.local` must be supplied with `--env-file`.
-* Current weather and five-day summary endpoints are implemented.
-* The domain layer contains thermal-sensation and precipitation-risk policies.
+* The `.env` file must be supplied with `--env-file .env`.
+* Current-weather and five-day summary endpoints are implemented.
+* The temperature webhook is implemented and configurable.
+* The webhook is triggered only by the current-weather use case.
+* The five-day summary does not trigger webhook alerts.
+* Successful webhook deliveries are deduplicated in Redis.
+* Webhook failures do not fail the current-weather endpoint.
+* The domain layer contains thermal-sensation, precipitation-risk, forecast-aggregation, and temperature-threshold rules.
 * The five-day result is derived from three-hour forecast entries.
-* Redis protects the provider from redundant requests.
+* Redis protects the provider from redundant calls and prevents duplicate alerts.
 * Sensitive values must not appear in logs.
+* `host.docker.internal` is intended only for local Docker-to-host testing.
 * Detailed `TRACE` logging should be enabled only during investigation.

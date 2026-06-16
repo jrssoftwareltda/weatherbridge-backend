@@ -33,12 +33,15 @@ public class WeatherQueryService
     private final ForecastAggregationService
             forecastAggregationService;
 
+    private final TemperatureAlertService
+            temperatureAlertService;
+
     private final Clock clock;
 
     public WeatherQueryService(
             WeatherProviderPort weatherProviderPort,
-            ForecastAggregationService
-                    forecastAggregationService,
+            ForecastAggregationService forecastAggregationService,
+            TemperatureAlertService temperatureAlertService,
             Clock clock
     ) {
         this.weatherProviderPort =
@@ -53,14 +56,29 @@ public class WeatherQueryService
                         "Forecast aggregation service must not be null."
                 );
 
-        this.clock = Objects.requireNonNull(
-                clock,
-                "Clock must not be null."
-        );
+        this.temperatureAlertService =
+                Objects.requireNonNull(
+                        temperatureAlertService,
+                        "Temperature alert service must not be null."
+                );
+
+        this.clock =
+                Objects.requireNonNull(
+                        clock,
+                        "Clock must not be null."
+                );
 
         log.debug(
-                "WeatherQueryService initialized: provider={}",
+                "WeatherQueryService initialized: "
+                        + "provider={}, forecastAggregationService={}, "
+                        + "temperatureAlertService={}",
                 weatherProviderPort
+                        .getClass()
+                        .getSimpleName(),
+                forecastAggregationService
+                        .getClass()
+                        .getSimpleName(),
+                temperatureAlertService
                         .getClass()
                         .getSimpleName()
         );
@@ -75,7 +93,8 @@ public class WeatherQueryService
                 "Weather location query must not be null."
         );
 
-        long startedAt = System.nanoTime();
+        long startedAt =
+                System.nanoTime();
 
         log.info(
                 "Starting current weather query: "
@@ -86,24 +105,55 @@ public class WeatherQueryService
         );
 
         try {
+            log.debug(
+                    "Calling current weather provider: "
+                            + "providerQuery={}, cacheKey={}",
+                    query.toProviderQuery(),
+                    query.cacheKey()
+            );
+
             CurrentWeather weather =
                     weatherProviderPort
-                            .getCurrentWeather(query);
+                            .getCurrentWeather(
+                                    query
+                            );
 
             if (weather == null) {
                 throw new IllegalStateException(
-                        "Weather provider returned a null current weather result."
+                        "Weather provider returned a null "
+                                + "current weather result."
                 );
             }
+
+            log.debug(
+                    "Current weather provider returned: "
+                            + "city={}, temperatureCelsius={}, "
+                            + "feelsLikeCelsius={}, condition={}, "
+                            + "observedAt={}, source={}",
+                    weather.location().city(),
+                    weather.temperature().value(),
+                    weather.temperature().feelsLike(),
+                    weather.condition(),
+                    weather.observedAt(),
+                    weather.source()
+            );
+
+            evaluateTemperatureAlert(
+                    weather,
+                    query
+            );
 
             log.info(
                     "Current weather query completed: "
                             + "city={}, temperatureCelsius={}, "
-                            + "condition={}, durationMs={}",
+                            + "condition={}, source={}, durationMs={}",
                     weather.location().city(),
                     weather.temperature().value(),
                     weather.condition(),
-                    elapsedMilliseconds(startedAt)
+                    weather.source(),
+                    elapsedMilliseconds(
+                            startedAt
+                    )
             );
 
             return weather;
@@ -111,12 +161,18 @@ public class WeatherQueryService
         } catch (RuntimeException exception) {
             log.error(
                     "Current weather query failed: "
-                            + "city={}, exceptionType={}, "
-                            + "message={}, durationMs={}",
+                            + "city={}, stateCode={}, countryCode={}, "
+                            + "exceptionType={}, message={}, durationMs={}",
                     query.city(),
-                    exception.getClass().getSimpleName(),
+                    query.stateCode(),
+                    query.countryCode(),
+                    exception
+                            .getClass()
+                            .getSimpleName(),
                     exception.getMessage(),
-                    elapsedMilliseconds(startedAt),
+                    elapsedMilliseconds(
+                            startedAt
+                    ),
                     exception
             );
 
@@ -133,7 +189,8 @@ public class WeatherQueryService
                 "Weather location query must not be null."
         );
 
-        long startedAt = System.nanoTime();
+        long startedAt =
+                System.nanoTime();
 
         log.info(
                 "Starting five-day weather summary query: "
@@ -153,7 +210,9 @@ public class WeatherQueryService
 
             WeatherForecast forecast =
                     weatherProviderPort
-                            .getFiveDayForecast(query);
+                            .getFiveDayForecast(
+                                    query
+                            );
 
             if (forecast == null) {
                 throw new IllegalStateException(
@@ -163,17 +222,21 @@ public class WeatherQueryService
 
             log.debug(
                     "Forecast provider returned: "
-                            + "city={}, slices={}, timezoneOffsetSeconds={}",
+                            + "city={}, slices={}, "
+                            + "timezoneOffsetSeconds={}, source={}",
                     forecast.location().city(),
                     forecast.slices().size(),
                     forecast.location()
-                            .timezoneOffsetSeconds()
+                            .timezoneOffsetSeconds(),
+                    forecast.source()
             );
 
             FiveDayWeatherSummary summary =
                     forecastAggregationService.aggregate(
                             forecast,
-                            Instant.now(clock)
+                            Instant.now(
+                                    clock
+                            )
                     );
 
             log.info(
@@ -182,7 +245,9 @@ public class WeatherQueryService
                     summary.location().city(),
                     summary.days().size(),
                     summary.source(),
-                    elapsedMilliseconds(startedAt)
+                    elapsedMilliseconds(
+                            startedAt
+                    )
             );
 
             return summary;
@@ -195,14 +260,47 @@ public class WeatherQueryService
                     query.city(),
                     query.stateCode(),
                     query.countryCode(),
-                    exception.getClass().getSimpleName(),
+                    exception
+                            .getClass()
+                            .getSimpleName(),
                     exception.getMessage(),
-                    elapsedMilliseconds(startedAt),
+                    elapsedMilliseconds(
+                            startedAt
+                    ),
                     exception
             );
 
             throw exception;
         }
+    }
+
+    private void evaluateTemperatureAlert(
+            CurrentWeather weather,
+            WeatherLocationQuery query
+    ) {
+        log.debug(
+                "Starting temperature alert evaluation: "
+                        + "city={}, temperatureCelsius={}, cacheKey={}",
+                weather.location().city(),
+                weather.temperature().value(),
+                query.cacheKey()
+        );
+
+        /*
+         * TemperatureAlertService trata a entrega como best-effort.
+         * Uma falha no webhook não deve invalidar a consulta de clima.
+         */
+        temperatureAlertService.evaluate(
+                weather,
+                query
+        );
+
+        log.debug(
+                "Temperature alert evaluation completed: "
+                        + "city={}, temperatureCelsius={}",
+                weather.location().city(),
+                weather.temperature().value()
+        );
     }
 
     private long elapsedMilliseconds(

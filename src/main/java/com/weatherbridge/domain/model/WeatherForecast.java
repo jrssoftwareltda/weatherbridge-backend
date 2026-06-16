@@ -1,5 +1,6 @@
 package com.weatherbridge.domain.model;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -26,6 +27,6 @@ public record WeatherForecast(
             );
         }
 
-        slices = List.copyOf(slices);
+        slices = new ArrayList<>(slices);
     }
 }

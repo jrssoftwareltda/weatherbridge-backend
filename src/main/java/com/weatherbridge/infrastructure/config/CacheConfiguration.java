@@ -46,6 +46,9 @@ public class CacheConfiguration {
                         .allowIfSubType(
                                 "com.weatherbridge."
                         )
+                        .allowIfSubType(
+                                "java.util.ArrayList"
+                        )
                         .build();
 
         GenericJacksonJsonRedisSerializer serializer =

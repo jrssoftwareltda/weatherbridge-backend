@@ -20,7 +20,7 @@ Redis Cache
   └─ Miss → call OpenWeather API
 ```
 
-![WeatherBridge cache request flow](docs/images/weatherbridge-cache-flow.svg)
+![weatherbridge-cache-flow.svg](../images/weatherbridge-cache-flow.svg)
 
 Caching is applied at the `OpenWeatherAdapter` boundary, keeping Redis outside the application and domain layers.
 
@@ -86,7 +86,7 @@ FORECAST_CACHE_TTL=30m
 WEATHER_ALERT_CACHE_TTL=30m
 ```
 
-![WeatherBridge cache lifecycle](docs/images/weatherbridge-cache-lifecycle.svg)
+![weatherbridge-cache-lifecycle.svg](../images/weatherbridge-cache-lifecycle.svg)
 
 ## How Caching Behaves
 

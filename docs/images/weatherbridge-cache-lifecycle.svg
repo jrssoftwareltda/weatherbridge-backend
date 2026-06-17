@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="520" viewBox="0 0 1400 520" role="img" aria-labelledby="title desc">
+  <title id="title">WeatherBridge cache lifecycle</title>
+  <desc id="desc">The first request produces a cache miss, calls OpenWeather, and stores a value with TTL. Following requests within the TTL are cache hits. After expiration, the next request refreshes the cached value.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-opacity="0.18"/>
+    </filter>
+    <style>
+      .title { font: 700 30px Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 17px Arial, sans-serif; fill: #475569; }
+      .step { font: 700 18px Arial, sans-serif; fill: #0f172a; }
+      .text { font: 400 15px Arial, sans-serif; fill: #334155; }
+      .time { font: 700 14px Arial, sans-serif; fill: #475569; }
+      .arrow { stroke: #334155; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .timeline { stroke: #94a3b8; stroke-width: 5; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="520" fill="#f8fafc"/>
+  <text x="70" y="62" class="title">Cache Lifecycle and TTL</text>
+  <text x="70" y="94" class="subtitle">A read does not renew the TTL. Expiration is measured from the moment the value is written.</text>
+
+  <line x1="120" y1="250" x2="1280" y2="250" class="timeline"/>
+
+  <g filter="url(#shadow)">
+    <circle cx="180" cy="250" r="24" fill="#f59e0b"/>
+    <rect x="85" y="130" width="190" height="90" rx="16" fill="#ffffff" stroke="#f59e0b" stroke-width="2"/>
+    <text x="180" y="165" text-anchor="middle" class="step">1. Cache miss</text>
+    <text x="180" y="192" text-anchor="middle" class="text">No Redis entry exists</text>
+
+    <circle cx="470" cy="250" r="24" fill="#7c3aed"/>
+    <rect x="365" y="285" width="210" height="105" rx="16" fill="#ffffff" stroke="#7c3aed" stroke-width="2"/>
+    <text x="470" y="322" text-anchor="middle" class="step">2. Upstream call</text>
+    <text x="470" y="350" text-anchor="middle" class="text">Fetch, map, and store</text>
+    <text x="470" y="375" text-anchor="middle" class="text">the domain result with TTL</text>
+
+    <circle cx="760" cy="250" r="24" fill="#16a34a"/>
+    <rect x="655" y="130" width="210" height="105" rx="16" fill="#ffffff" stroke="#16a34a" stroke-width="2"/>
+    <text x="760" y="167" text-anchor="middle" class="step">3. Cache hits</text>
+    <text x="760" y="195" text-anchor="middle" class="text">Requests are served</text>
+    <text x="760" y="220" text-anchor="middle" class="text">directly from Redis</text>
+
+    <circle cx="1040" cy="250" r="24" fill="#dc2626"/>
+    <rect x="935" y="285" width="210" height="105" rx="16" fill="#ffffff" stroke="#dc2626" stroke-width="2"/>
+    <text x="1040" y="322" text-anchor="middle" class="step">4. TTL expires</text>
+    <text x="1040" y="350" text-anchor="middle" class="text">Redis removes the entry</text>
+    <text x="1040" y="375" text-anchor="middle" class="text">automatically</text>
+
+    <circle cx="1260" cy="250" r="24" fill="#0284c7"/>
+    <rect x="1160" y="130" width="200" height="105" rx="16" fill="#ffffff" stroke="#0284c7" stroke-width="2"/>
+    <text x="1260" y="167" text-anchor="middle" class="step">5. Refresh</text>
+    <text x="1260" y="195" text-anchor="middle" class="text">The next request becomes</text>
+    <text x="1260" y="220" text-anchor="middle" class="text">a new cache miss</text>
+  </g>
+
+  <path d="M204 250 H446" class="arrow"/>
+  <path d="M494 250 H736" class="arrow"/>
+  <path d="M784 250 H1016" class="arrow"/>
+  <path d="M1064 250 H1236" class="arrow"/>
+
+  <text x="180" y="285" text-anchor="middle" class="time">t = 0</text>
+  <text x="760" y="285" text-anchor="middle" class="time">within TTL</text>
+  <text x="1040" y="225" text-anchor="middle" class="time">TTL boundary</text>
+
+  <rect x="245" y="435" width="900" height="48" rx="24" fill="#e2e8f0"/>
+  <rect x="245" y="435" width="630" height="48" rx="24" fill="#bbf7d0"/>
+  <text x="560" y="465" text-anchor="middle" class="time">cached and available</text>
+  <text x="1010" y="465" text-anchor="middle" class="time">expired</text>
+</svg>

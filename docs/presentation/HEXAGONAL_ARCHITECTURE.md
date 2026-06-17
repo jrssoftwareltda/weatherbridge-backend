@@ -1,6 +1,6 @@
 # Hexagonal Architecture Overview
 
-![Hexagonal Architecture — Ports and Adapters](hexagonal_architecture.svg)
+![Hexagonal Architecture — Ports and Adapters](../images/hexagonal_architecture.svg)
 
 Hexagonal Architecture, also known as **Ports and Adapters Architecture**, structures an application so that its business logic remains independent of frameworks, databases, user interfaces, messaging systems, and external services.
 
